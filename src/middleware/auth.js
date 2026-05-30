@@ -20,7 +20,7 @@ const auth = async (req, res, next) => {
       throw new AuthenticationError("Invalid access token");
     }
 
-    const user = await User.findById(payload.userId);
+    const user = await User.findByPk(payload.userId);
     if (!user) {
       throw new AuthenticationError("Authenticated user not found");
     }
