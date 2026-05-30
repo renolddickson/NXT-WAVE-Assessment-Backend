@@ -4,7 +4,7 @@ const dbUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.
 
 const sequelize = new Sequelize(dbUrl, {
   dialect: "postgres",
-  logging: false, // Set to console.log in development if query logs are desired
+  logging: false,
   pool: {
     max: 5,
     min: 0,

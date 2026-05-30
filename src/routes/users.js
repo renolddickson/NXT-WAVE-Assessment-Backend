@@ -28,7 +28,6 @@ const createUserSchema = Joi.object({
   }),
 });
 
-// All user administration endpoints are restricted to authenticated ADMINs
 router.use(auth);
 router.use(requireRole(["ADMIN"]));
 

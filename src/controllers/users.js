@@ -3,7 +3,6 @@ const { ConflictError } = require("../utils/errors");
 
 const getUsers = async (req, res, next) => {
   try {
-    // Return all users belonging to the ADMIN's organization in descending order
     const users = await User.findAll({
       where: { organizationId: req.user.organizationId },
       attributes: { exclude: ["password"] },
@@ -25,7 +24,6 @@ const createUser = async (req, res, next) => {
       throw new ConflictError("Email already in use");
     }
 
-    // Force user creation inside the ADMIN's organization
     const newUser = await User.create({
       name,
       email,

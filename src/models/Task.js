@@ -59,7 +59,6 @@ const Task = sequelize.define(
       {
         fields: ["organizationId"],
       },
-      // Compound index to optimize filtered list queries
       {
         name: "tasks_org_assignee_status_priority_compound",
         fields: ["organizationId", "assignee", "status", "priority"],

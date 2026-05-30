@@ -16,13 +16,10 @@ const projectSchema = Joi.object({
   description: Joi.string().allow("").max(500),
 });
 
-// All project routes require authentication
 router.use(auth);
 
-// Read projects
 router.get("/", getProjects);
 
-// Write/Mutate projects (ADMIN and MANAGER only)
 router.post("/", requireRole(["ADMIN", "MANAGER"]), validate(projectSchema), createProject);
 router.put("/:id", requireRole(["ADMIN", "MANAGER"]), validate(projectSchema), updateProject);
 router.delete("/:id", requireRole(["ADMIN", "MANAGER"]), deleteProject);

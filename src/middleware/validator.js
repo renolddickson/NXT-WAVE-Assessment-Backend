@@ -9,12 +9,10 @@ const validate = (schema, target = "body") => {
     });
 
     if (error) {
-      // Return the first validation error message cleanly formatted
       const message = error.details[0].message.replace(/"/g, "");
       return next(new ValidationError(message));
     }
 
-    // Replace the request target with the validated & stripped value
     req[target] = value;
     next();
   };

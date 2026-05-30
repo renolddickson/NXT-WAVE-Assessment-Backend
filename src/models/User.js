@@ -50,7 +50,6 @@ const User = sequelize.define(
   }
 );
 
-// Password hashing hooks
 const hashPassword = async (user) => {
   if (user.changed("password")) {
     const salt = await bcrypt.genSalt(10);
@@ -61,7 +60,6 @@ const hashPassword = async (user) => {
 User.beforeCreate(hashPassword);
 User.beforeUpdate(hashPassword);
 
-// Instance method to compare password
 User.prototype.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
