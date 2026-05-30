@@ -15,6 +15,21 @@ const requireRole = (allowedRoles) => {
   };
 };
 
+const canAdvanceTaskStatus = (req, res, next) => {
+  if (!req.task) {
+    return next(new ForbiddenError("Task context not available"));
+  }
+
+  const isAssignee = req.task.assignee.toString() === req.user.id.toString();
+  const isManager = req.user.role === "MANAGER";
+
+  if (!isAssignee && !isManager) {
+    return next(new ForbiddenError("Only the assignee or a MANAGER can advance a task's status"));
+  }
+
+  next();
+};
+
 const checkTaskAccess = async (req, res, next) => {
   try {
     const taskId = req.params.id;
@@ -27,11 +42,11 @@ const checkTaskAccess = async (req, res, next) => {
       throw new NotFoundError("Task not found");
     }
 
-    if (task.organizationId !== req.user.organizationId) {
+    if (task.organizationId.toString() !== req.user.organizationId.toString()) {
       throw new NotFoundError("Task not found");
     }
 
-    if (req.user.role === "MEMBER" && task.assignee !== req.user.id) {
+    if (req.user.role === "MEMBER" && task.assignee.toString() !== req.user.id.toString()) {
       throw new ForbiddenError("You can only access tasks assigned to you");
     }
 
@@ -44,5 +59,6 @@ const checkTaskAccess = async (req, res, next) => {
 
 module.exports = {
   requireRole,
+  canAdvanceTaskStatus,
   checkTaskAccess,
 };

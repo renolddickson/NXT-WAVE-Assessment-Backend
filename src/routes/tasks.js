@@ -1,7 +1,7 @@
 const express = require("express");
 const Joi = require("joi");
 const auth = require("../middleware/auth");
-const { requireRole, checkTaskAccess } = require("../middleware/rbac");
+const { requireRole, checkTaskAccess, canAdvanceTaskStatus } = require("../middleware/rbac");
 const validate = require("../middleware/validator");
 const {
   getTasks,
@@ -65,7 +65,7 @@ router.post("/", requireRole(["ADMIN", "MANAGER"]), validate(createTaskSchema), 
 
 router.get("/:id", checkTaskAccess, getTaskById);
 router.put("/:id", requireRole(["ADMIN", "MANAGER"]), checkTaskAccess, validate(updateTaskSchema), updateTask);
-router.patch("/:id/status", checkTaskAccess, validate(advanceStatusSchema), advanceTaskStatus);
+router.patch("/:id/status", checkTaskAccess, canAdvanceTaskStatus, validate(advanceStatusSchema), advanceTaskStatus);
 router.delete("/:id", requireRole(["ADMIN", "MANAGER"]), checkTaskAccess, deleteTask);
 
 module.exports = router;

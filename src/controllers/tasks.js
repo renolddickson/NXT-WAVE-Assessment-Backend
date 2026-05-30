@@ -2,7 +2,7 @@ const Task = require("../models/Task");
 const User = require("../models/User");
 const Project = require("../models/Project");
 const { getCache, setCache, invalidateCachePattern } = require("../config/redis");
-const { NotFoundError, ValidationError, ForbiddenError } = require("../utils/errors");
+const { ValidationError } = require("../utils/errors");
 
 const ALLOWED_TRANSITIONS = {
   TODO: ["IN_PROGRESS", "BLOCKED"],
@@ -192,12 +192,6 @@ const advanceTaskStatus = async (req, res, next) => {
       throw new ValidationError(
         `Invalid status transition from ${currentStatus} to ${status}. Allowed: ${allowedNext.join(", ") || "None"}`
       );
-    }
-
-    const isAssignee = task.assignee.toString() === req.user.id.toString();
-    const isManagerOrAdmin = ["MANAGER", "ADMIN"].includes(req.user.role);
-    if (!isAssignee && !isManagerOrAdmin) {
-      throw new ForbiddenError("Only the assignee or a MANAGER/ADMIN can advance a task's status");
     }
 
     task.status = status;

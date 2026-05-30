@@ -160,7 +160,7 @@ Authorization is strictly decoupled from business logic and enforced at the **Ex
 | `/api/projects/*` | View List | `ADMIN`, `MANAGER`, `MEMBER` | Scoped to `organizationId` |
 | `/api/tasks/*` | Create / Edit / Delete | `ADMIN`, `MANAGER` | `requireRole(['ADMIN', 'MANAGER'])` |
 | `/api/tasks/*` | View List / Single | `ADMIN`, `MANAGER`, `MEMBER` | `checkTaskAccess` (forces `MEMBER` to view only assigned tasks) |
-| `/api/tasks/:id/status`| Advance Status | `ADMIN`, `MANAGER`, `assignee` | `checkTaskAccess` + Controller logic comparing `req.user.id` |
+| `/api/tasks/:id/status`| Advance Status | `MANAGER`, `assignee` | `checkTaskAccess` + `canAdvanceTaskStatus` middleware |
 
 ### Access Control Middleware Code-Design (`checkTaskAccess`)
 
@@ -197,7 +197,7 @@ stateDiagram-v2
 2. A task can transition into `BLOCKED` from any active state (`TODO`, `IN_PROGRESS`, `IN_REVIEW`).
 3. A task can transition back out of `BLOCKED` into any active state.
 4. `DONE` is a terminal state. Once completed, the task status cannot be changed.
-5. **Role Check**: Only the **assignee** of the task, a **MANAGER**, or an **ADMIN** in the organization is permitted to advance the status.
+5. **Role Check**: Only the **assignee** of the task or a **MANAGER** in the organization is permitted to advance the status.
 
 ---
 
@@ -295,6 +295,15 @@ Using **Joi**, we strictly validate incoming JSON payloads on `body`, `query`, a
   }
   ```
 
+#### Update User
+- **Endpoint**: `PUT /api/users/:id`
+- **Headers**: `Authorization: Bearer <ADMIN-ACCESS-TOKEN>`
+- **Body**: Any one or more of `name`, `email`, `password`, `role`.
+
+#### Delete User
+- **Endpoint**: `DELETE /api/users/:id`
+- **Headers**: `Authorization: Bearer <ADMIN-ACCESS-TOKEN>`
+
 ---
 
 ### Projects (ADMIN / MANAGER only for writes)
@@ -339,7 +348,7 @@ Using **Joi**, we strictly validate incoming JSON payloads on `body`, `query`, a
   }
   ```
 
-#### Advance Task Status (Assignee or ADMIN/MANAGER)
+#### Advance Task Status (Assignee or MANAGER)
 - **Endpoint**: `PATCH /api/tasks/:id/status`
 - **Body**:
   ```json
@@ -387,6 +396,14 @@ Using **Joi**, we strictly validate incoming JSON payloads on `body`, `query`, a
    node src/scripts/verify.js
    ```
 
+   Or use the package script:
+   ```bash
+   npm test
+   ```
+
+5. **API Specification**:
+   A Swagger/OpenAPI 3.0 spec is included at `openapi.yaml`. Import it into Swagger UI, Postman, Insomnia, or another API client to inspect and test the endpoints.
+
 ---
 
 ### Containerized Deployment (Docker Compose)
@@ -395,7 +412,7 @@ The entire application stack (Web API, PostgreSQL database, and Redis caching en
 
 1. **Build and start services**:
    ```bash
-   docker-compose up --build -d
+   docker compose up --build -d
    ```
 
 2. **Verify running containers**:
@@ -405,5 +422,18 @@ The entire application stack (Web API, PostgreSQL database, and Redis caching en
 
 3. **Shut down services**:
    ```bash
-   docker-compose down
+   docker compose down
    ```
+
+The compose file includes health checks for PostgreSQL, Redis, and the web service. The API waits for PostgreSQL and Redis to become healthy before starting, and the Node process also retries PostgreSQL connection attempts during startup.
+
+---
+
+## 8. What I Would Improve Given More Time
+
+- Add a formal migration system with Sequelize migrations instead of `sequelize.sync({ alter: true })`.
+- Add broader automated coverage with Jest/Supertest, including refresh-token reuse, cross-organization access attempts, user update/delete flows, and task status authorization.
+- Add an analytics endpoint for overdue task counts per user and average task completion time.
+- Add real-time notifications with WebSocket or Server-Sent Events when assigned tasks change.
+- Add rate limiting and request logging for stronger production hardening.
+- Add a basic frontend task board consuming the documented REST API.

@@ -14,12 +14,26 @@ const sequelize = new Sequelize(dbUrl, {
 });
 
 const connectDB = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log("PostgreSQL Database connected successfully.");
-  } catch (error) {
-    console.error("Unable to connect to the PostgreSQL database:", error.message);
-    process.exit(1);
+  const maxAttempts = Number(process.env.DB_CONNECT_RETRIES || 10);
+  const retryDelayMs = Number(process.env.DB_CONNECT_RETRY_DELAY_MS || 3000);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await sequelize.authenticate();
+      console.log("PostgreSQL Database connected successfully.");
+      return;
+    } catch (error) {
+      const hasAttemptsLeft = attempt < maxAttempts;
+      console.error(
+        `Unable to connect to PostgreSQL database (attempt ${attempt}/${maxAttempts}): ${error.message}`
+      );
+
+      if (!hasAttemptsLeft) {
+        process.exit(1);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
 };
 

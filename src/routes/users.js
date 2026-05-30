@@ -3,7 +3,7 @@ const Joi = require("joi");
 const auth = require("../middleware/auth");
 const { requireRole } = require("../middleware/rbac");
 const validate = require("../middleware/validator");
-const { getUsers, createUser } = require("../controllers/users");
+const { getUsers, createUser, updateUser, deleteUser } = require("../controllers/users");
 
 const router = express.Router();
 
@@ -28,10 +28,33 @@ const createUserSchema = Joi.object({
   }),
 });
 
+const updateUserSchema = Joi.object({
+  name: Joi.string().min(2).max(50).messages({
+    "string.empty": "name cannot be empty",
+  }),
+  email: Joi.string().email().messages({
+    "string.empty": "email cannot be empty",
+    "string.email": "email must be a valid email address",
+  }),
+  password: Joi.string().min(6).messages({
+    "string.empty": "password cannot be empty",
+    "string.min": "password must be at least 6 characters long",
+  }),
+  role: Joi.string().valid("ADMIN", "MANAGER", "MEMBER").messages({
+    "any.only": "role must be one of ADMIN, MANAGER, MEMBER",
+  }),
+})
+  .min(1)
+  .messages({
+    "object.min": "at least one field is required",
+  });
+
 router.use(auth);
 router.use(requireRole(["ADMIN"]));
 
 router.get("/", getUsers);
 router.post("/", validate(createUserSchema), createUser);
+router.put("/:id", validate(updateUserSchema), updateUser);
+router.delete("/:id", deleteUser);
 
 module.exports = router;

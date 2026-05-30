@@ -17,6 +17,7 @@ const logTest = (name, passed, detail = "") => {
 
 const runTests = async () => {
   let server;
+  let exitCode = 0;
   try {
     // 1. Establish connections
     console.log("Setting up DB & Redis connection for tests...");
@@ -431,6 +432,7 @@ const runTests = async () => {
 
     console.log("\n--- Verification Suite Completed Successfully! ---");
   } catch (error) {
+    exitCode = 1;
     console.error("Test execution failed:", error);
   } finally {
     if (server) {
@@ -439,8 +441,10 @@ const runTests = async () => {
       });
     }
     await sequelize.close();
-    await client.quit();
-    process.exit(0);
+    if (client.isOpen) {
+      await client.quit();
+    }
+    process.exit(exitCode);
   }
 };
 

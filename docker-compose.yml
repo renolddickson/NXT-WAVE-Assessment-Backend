@@ -13,8 +13,15 @@ services:
       - JWT_REFRESH_EXPIRY=7d
       - NODE_ENV=production
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   postgres:
@@ -27,6 +34,11 @@ services:
       - POSTGRES_DB=task_tracker
     volumes:
       - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d task_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: always
 
   redis:
@@ -35,6 +47,11 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: always
 
 volumes:
