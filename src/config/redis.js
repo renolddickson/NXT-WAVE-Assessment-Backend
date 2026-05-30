@@ -1,10 +1,33 @@
 const { createClient } = require("redis");
 
 const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-const client = createClient({ url: redisUrl });
+
+let hasLoggedMaxRetries = false;
+
+const client = createClient({
+  url: redisUrl,
+  socket: {
+    reconnectStrategy: (retries) => {
+      // Limit reconnect attempts to 3 when offline to prevent console flood
+      if (retries >= 3) {
+        if (!hasLoggedMaxRetries) {
+          console.warn("Redis Server is offline. Running application in database-only mode (caching disabled).");
+          hasLoggedMaxRetries = true;
+        }
+        // Return an Error to stop the auto-reconnect infinite loop
+        return new Error("Redis connection failed");
+      }
+      // Delay before retrying
+      return 2000;
+    },
+  },
+});
 
 client.on("error", (err) => {
-  console.error("Redis Client Error:", err);
+  // Only log if we haven't given up yet
+  if (!hasLoggedMaxRetries) {
+    console.error("Redis connection attempt failed. Retrying...");
+  }
 });
 
 client.on("connect", () => {
@@ -13,13 +36,17 @@ client.on("connect", () => {
 
 client.on("ready", () => {
   console.log("Redis Client Connected and Ready.");
+  hasLoggedMaxRetries = false; // Reset on success
 });
 
 const connectRedis = async () => {
   try {
     await client.connect();
   } catch (error) {
-    console.error("Failed to connect to Redis:", error.message);
+    // Gracefully catch connection errors
+    if (!hasLoggedMaxRetries) {
+      console.warn("Redis Connection failed on startup:", error.message);
+    }
   }
 };
 
