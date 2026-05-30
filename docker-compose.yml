@@ -1,0 +1,42 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/task_tracker
+      - REDIS_URL=redis://redis:6379
+      - JWT_ACCESS_SECRET=super_secret_access_key_12345_docker
+      - JWT_ACCESS_EXPIRY=15m
+      - JWT_REFRESH_SECRET=super_secret_refresh_key_12345_docker
+      - JWT_REFRESH_EXPIRY=7d
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=task_tracker
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7.0-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: always
+
+volumes:
+  pg-data:
+  redis-data:
