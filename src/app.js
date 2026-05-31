@@ -4,6 +4,7 @@ const authRouter = require("./routes/auth");
 const usersRouter = require("./routes/users");
 const projectsRouter = require("./routes/projects");
 const tasksRouter = require("./routes/tasks");
+const analyticsRouter = require("./routes/analytics");
 const errorHandler = require("./middleware/errorHandler");
 const { NotFoundError } = require("./utils/errors");
 
@@ -20,6 +21,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/tasks", tasksRouter);
+app.use("/api/analytics", analyticsRouter);
 
 app.use((req, res, next) => {
   next(new NotFoundError("Route not found"));
