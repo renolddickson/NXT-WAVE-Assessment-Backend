@@ -1,5 +1,8 @@
 # Team Task Tracker REST API
 
+* **Backend Repository**: https://github.com/renolddickson/NXT-WAVE-Assessment-Backend
+* **Frontend Repository**: https://github.com/renolddickson/NXT-WAVE-Assessment-Frontend
+
 A production-ready, secure, and containerized Express.js REST API for team-based task tracking. Featuring multi-tenant boundaries, robust role-based access control (RBAC) implemented cleanly at the middleware level, strictly enforced state transitions, Redis-backed list caching with active invalidation, standardized JSON error formatting, and a full Docker orchestration environment.
 
 This system has been built on top of **PostgreSQL** using the **Sequelize ORM** for strong relational data integrity, strict table constraints, and high-performance database-level indexes.
