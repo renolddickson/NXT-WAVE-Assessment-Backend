@@ -359,6 +359,34 @@ Using **Joi**, we strictly validate incoming JSON payloads on `body`, `query`, a
 
 ---
 
+### Analytics (ADMIN / MANAGER)
+
+#### Task Analytics By User
+- **Endpoint**: `GET /api/analytics/tasks`
+- **Returns**: One record per user in the organization with:
+  - `overdueTaskCount`: assigned tasks where `due_date` is in the past and status is not `DONE`
+  - `avgCompletionTimeHours`: average hours between task creation and completion for tasks completed through the status workflow
+
+Example response:
+```json
+{
+  "analytics": [
+    {
+      "user": {
+        "id": "user-id",
+        "name": "Charlie Member",
+        "email": "charlie@tracker.com",
+        "role": "MEMBER"
+      },
+      "overdueTaskCount": 2,
+      "avgCompletionTimeHours": 18.5
+    }
+  ]
+}
+```
+
+---
+
 ## 7. How to Run & Deploy
 
 ### Prerequisites
@@ -391,7 +419,7 @@ Using **Joi**, we strictly validate incoming JSON payloads on `body`, `query`, a
    ```
 
 4. **Run Integration Tests**:
-   Ensure PostgreSQL and Redis are active, then run:
+   Ensure PostgreSQL is active, then run:
    ```bash
    node src/scripts/verify.js
    ```
@@ -401,8 +429,26 @@ Using **Joi**, we strictly validate incoming JSON payloads on `body`, `query`, a
    npm test
    ```
 
+   **Test database caution**: the integration test calls `sequelize.sync({ force: true })`, which drops and recreates tables for the configured `DATABASE_URL`. Use a separate local test database such as `task_tracker_test` when you want to keep existing development users/tasks.
+
+   Recommended local test setup:
+   ```env
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/task_tracker_test
+   ```
+
+   The current test suite is intentionally small. It covers two critical backend flows:
+   - authentication with refresh-token rotation and token reuse prevention
+   - task RBAC with server-enforced status transitions
+
+   Redis caching is verified through the implementation path and Docker setup, but the automated test avoids depending on cache timing or local Redis state.
+
 5. **API Specification**:
    A Swagger/OpenAPI 3.0 spec is included at `openapi.yaml`. Import it into Swagger UI, Postman, Insomnia, or another API client to inspect and test the endpoints.
+
+   Quick options:
+   - Paste `openapi.yaml` into https://editor.swagger.io
+   - Import `openapi.yaml` into Postman
+   - Use a VS Code OpenAPI/Swagger preview extension
 
 ---
 
@@ -429,11 +475,22 @@ The compose file includes health checks for PostgreSQL, Redis, and the web servi
 
 ---
 
-## 8. What I Would Improve Given More Time
+## 8. Implementation Notes
+
+- The API keeps authorization in middleware wherever practical. Route-level middleware handles role checks, task ownership checks, and status-advance permission before controller logic runs.
+- PostgreSQL is the source of truth. Redis is used only as a task-list cache for assignee-based dashboard queries.
+- Refresh tokens are stored in PostgreSQL and rotated on use. Each refresh token includes a unique token ID so repeated generation cannot accidentally create the same JWT.
+- `completedAt` is set when a task reaches `DONE`. The analytics endpoint uses this value to calculate average completion time.
+- The project uses `sequelize.sync({ alter: true })` for simple reviewer setup. In production, I would replace this with explicit migrations.
+- The code is structured around routes, middleware, controllers, models, and config files to keep changes localized and reviewable.
+
+---
+
+## 9. What I Would Improve Given More Time
 
 - Add a formal migration system with Sequelize migrations instead of `sequelize.sync({ alter: true })`.
-- Add broader automated coverage with Jest/Supertest, including refresh-token reuse, cross-organization access attempts, user update/delete flows, and task status authorization.
-- Add an analytics endpoint for overdue task counts per user and average task completion time.
+- Move the integration test configuration to a dedicated `TEST_DATABASE_URL` so test data can never touch a normal development database by accident.
+- Add broader automated coverage with Jest/Supertest for cross-organization access attempts, user update/delete flows, analytics, and Redis invalidation.
 - Add real-time notifications with WebSocket or Server-Sent Events when assigned tasks change.
 - Add rate limiting and request logging for stronger production hardening.
 - Add a basic frontend task board consuming the documented REST API.

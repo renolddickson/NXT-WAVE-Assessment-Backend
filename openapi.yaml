@@ -2,11 +2,22 @@ openapi: 3.0.3
 info:
   title: Team Task Tracker API
   version: 1.0.0
-  description: REST API for organization-scoped task tracking with JWT auth, RBAC, task workflow transitions, and Redis-backed task list caching.
+  description: |
+    REST API for organization-scoped task tracking with JWT auth, middleware-level RBAC,
+    server-enforced task workflow transitions, Redis-backed task list caching, and task analytics.
+
+    Testing note: the included integration test resets tables for the configured DATABASE_URL.
+    Use a separate local test database when preserving development data matters.
 servers:
   - url: http://localhost:3000
 security:
   - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Users
+  - name: Projects
+  - name: Tasks
+  - name: Analytics
 paths:
   /health:
     get:
@@ -17,6 +28,7 @@ paths:
           description: API is healthy
   /api/auth/register:
     post:
+      tags: [Auth]
       security: []
       summary: Register an organization and first admin user
       requestBody:
@@ -38,6 +50,7 @@ paths:
           $ref: "#/components/responses/ConflictError"
   /api/auth/login:
     post:
+      tags: [Auth]
       security: []
       summary: Login with email and password
       requestBody:
@@ -57,6 +70,7 @@ paths:
           $ref: "#/components/responses/AuthError"
   /api/auth/refresh:
     post:
+      tags: [Auth]
       security: []
       summary: Rotate refresh token and issue a new token pair
       requestBody:
@@ -76,6 +90,7 @@ paths:
           $ref: "#/components/responses/AuthError"
   /api/auth/logout:
     post:
+      tags: [Auth]
       security: []
       summary: Revoke a refresh token
       requestBody:
@@ -89,6 +104,7 @@ paths:
           description: Logged out
   /api/users:
     get:
+      tags: [Users]
       summary: List users in the current organization
       responses:
         "200":
@@ -102,6 +118,7 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenError"
     post:
+      tags: [Users]
       summary: Create a user in the current organization
       requestBody:
         required: true
@@ -124,6 +141,7 @@ paths:
           $ref: "#/components/responses/ConflictError"
   /api/users/{id}:
     put:
+      tags: [Users]
       summary: Update a user in the current organization
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -143,6 +161,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFoundError"
     delete:
+      tags: [Users]
       summary: Delete a user in the current organization
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -153,6 +172,7 @@ paths:
           $ref: "#/components/responses/NotFoundError"
   /api/projects:
     get:
+      tags: [Projects]
       summary: List projects in the current organization
       responses:
         "200":
@@ -164,6 +184,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/Project"
     post:
+      tags: [Projects]
       summary: Create a project
       requestBody:
         required: true
@@ -176,6 +197,7 @@ paths:
           description: Created project
   /api/projects/{id}:
     put:
+      tags: [Projects]
       summary: Update a project
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -189,6 +211,7 @@ paths:
         "200":
           description: Updated project
     delete:
+      tags: [Projects]
       summary: Delete a project
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -197,7 +220,9 @@ paths:
           description: Deleted
   /api/tasks:
     get:
+      tags: [Tasks]
       summary: List tasks with pagination and filters
+      description: Members are automatically scoped to their own assigned tasks. Assignee-filtered lists are cached in Redis.
       parameters:
         - name: page
           in: query
@@ -230,6 +255,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/TaskListResponse"
     post:
+      tags: [Tasks]
       summary: Create a task
       requestBody:
         required: true
@@ -246,6 +272,7 @@ paths:
                 $ref: "#/components/schemas/Task"
   /api/tasks/{id}:
     get:
+      tags: [Tasks]
       summary: Get a task by ID
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -257,6 +284,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Task"
     put:
+      tags: [Tasks]
       summary: Update a task
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -270,6 +298,7 @@ paths:
         "200":
           description: Updated task
     delete:
+      tags: [Tasks]
       summary: Delete a task
       parameters:
         - $ref: "#/components/parameters/Id"
@@ -278,7 +307,9 @@ paths:
           description: Deleted
   /api/tasks/{id}/status:
     patch:
+      tags: [Tasks]
       summary: Advance task status through the server-enforced workflow
+      description: Only the assigned user or a manager can advance status. Valid transitions are enforced server-side.
       parameters:
         - $ref: "#/components/parameters/Id"
       requestBody:
@@ -299,6 +330,22 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "403":
           $ref: "#/components/responses/ForbiddenError"
+  /api/analytics/tasks:
+    get:
+      tags: [Analytics]
+      summary: Get overdue task count and average completion time per user
+      description: Returns organization-scoped task analytics for admins and managers.
+      responses:
+        "200":
+          description: Task analytics by user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskAnalyticsResponse"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "401":
+          $ref: "#/components/responses/AuthError"
 components:
   securitySchemes:
     bearerAuth:
@@ -476,6 +523,7 @@ components:
           type: string
     Task:
       type: object
+      description: Task record. completedAt is set when the task is advanced to DONE.
       properties:
         id:
           type: string
@@ -501,6 +549,10 @@ components:
         due_date:
           type: string
           format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
     CreateTaskRequest:
       type: object
       required: [title, priority, assignee, due_date]
@@ -558,3 +610,21 @@ components:
               type: integer
             pages:
               type: integer
+    TaskAnalyticsResponse:
+      type: object
+      description: Per-user analytics for overdue work and completion speed.
+      properties:
+        analytics:
+          type: array
+          items:
+            type: object
+            properties:
+              user:
+                $ref: "#/components/schemas/User"
+              overdueTaskCount:
+                type: integer
+                example: 2
+              avgCompletionTimeHours:
+                type: number
+                nullable: true
+                example: 18.5
