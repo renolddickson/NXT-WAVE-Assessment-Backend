@@ -10,7 +10,7 @@ const RefreshToken = sequelize.define(
       primaryKey: true,
     },
     token: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(1024),
       allowNull: false,
       unique: true,
     },

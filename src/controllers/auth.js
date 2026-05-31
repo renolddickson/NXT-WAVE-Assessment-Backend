@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { Op } = require("sequelize");
 const { sequelize } = require("../config/db");
 const Organization = require("../models/Organization");
@@ -14,7 +15,7 @@ const generateTokenPair = async (user) => {
   );
 
   const refreshTokenValue = jwt.sign(
-    { userId: user.id },
+    { userId: user.id, tokenId: crypto.randomUUID() },
     process.env.JWT_REFRESH_SECRET || "super_secret_refresh_key_12345",
     { expiresIn: process.env.JWT_REFRESH_EXPIRY || "7d" }
   );
@@ -72,7 +73,9 @@ const register = async (req, res, next) => {
       ...tokens,
     });
   } catch (error) {
-    await transaction.rollback();
+    if (!transaction.finished) {
+      await transaction.rollback();
+    }
     next(error);
   }
 };
