@@ -43,6 +43,9 @@ const Task = sequelize.define(
     due_date: {
       type: DataTypes.DATE,
     },
+    completedAt: {
+      type: DataTypes.DATE,
+    },
   },
   {
     timestamps: true,
@@ -55,6 +58,9 @@ const Task = sequelize.define(
       },
       {
         fields: ["due_date"],
+      },
+      {
+        fields: ["completedAt"],
       },
       {
         fields: ["organizationId"],

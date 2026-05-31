@@ -195,6 +195,9 @@ const advanceTaskStatus = async (req, res, next) => {
     }
 
     task.status = status;
+    if (status === "DONE" && !task.completedAt) {
+      task.completedAt = new Date();
+    }
     await task.save();
 
     await clearAssigneeCache(task.assignee);
