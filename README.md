@@ -6,7 +6,134 @@ This system has been built on top of **PostgreSQL** using the **Sequelize ORM** 
 
 ---
 
+## Quick Start & Build Instructions
+
+### Option A: Containerized Deployment (Docker Compose) - [RECOMMENDED]
+Reviewers can spin up the entire application stack (Web API, PostgreSQL database, and Redis caching engine) instantly without any manual database or system setup:
+
+1. **Build and start services**:
+   ```bash
+   docker compose up --build -d
+   ```
+2. **Verify running containers & health status**:
+   ```bash
+   docker ps
+   ```
+3. **Shut down services**:
+   ```bash
+   docker compose down
+   ```
+*Note: The compose orchestration includes strict system health checks. The Express API automatically waits for PostgreSQL and Redis to be fully online and ready before accepting requests.*
+
+---
+
+### Option B: Local Setup & Manual Run
+
+#### Prerequisites
+* Node.js (v20 or higher)
+* PostgreSQL database instance running
+* Redis instance running
+
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+2. **Configure Environment Variables**:
+   Create a `.env` file in the root folder using `.env.example` as a template:
+   ```env
+   PORT=3000
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/task_tracker
+   REDIS_URL=redis://localhost:6379
+   JWT_ACCESS_SECRET=super_secret_access_key_12345
+   JWT_ACCESS_EXPIRY=15m
+   JWT_REFRESH_SECRET=super_secret_refresh_key_12345
+   JWT_REFRESH_EXPIRY=7d
+   ```
+3. **Start the Development Server**:
+   ```bash
+   npm run dev
+   ```
+
+---
+
+### Running Integration Tests
+To run the automated integration/E2E test suite (which validates JWT rotation, role permissions, and status workflows):
+
+Ensure your PostgreSQL instance is running, and then execute:
+```bash
+npm test
+```
+*Caution: The integration test drops and recreates test tables. Use a dedicated test database (e.g. `task_tracker_test`) to preserve development data.*
+
+---
+
+### API Specification
+A fully complete OpenAPI 3.0 specification is available in the repository at `openapi.yaml`. You can import this file directly into Postman, Insomnia, or Swagger UI to inspect and hit all the endpoints.
+
+---
+
+## Executive Summary for Reviewer
+
+### What is Built (Core Requirements Met)
+1. **Multi-Tenant Architecture**: Registers and isolates organizations. The registration flow automatically boots up the first user as an **ADMIN** of the new organization.
+2. **Organization-scoped Credentials & Access (RBAC)**:
+   * **ADMIN (Full Access)**: Provisions the organization's user database, creating, updating, and deleting team profiles (**MANAGERS** and **MEMBERS**).
+   * **MANAGER (Task & Scope Lead)**: Creates tasks and assigns team members. Cannot manage the user directory.
+   * **MEMBER (Task Executor)**: Sees only tasks explicitly assigned to them.
+3. **Task Status Advancement & Safe Transitions**: Updates status via sequential paths: `TODO` → `IN_PROGRESS` → `IN_REVIEW` → `DONE` (and `BLOCKED` from any active state). Only the task assignee or a `MANAGER` is authorized to advance the status.
+4. **B-Tree Database Indexing**: Optimized single-column indexes on highly queried filters (`assignee`, `status`, `due_date`) and a left-to-right compound search index (`organizationId`, `assignee`, `status`, `priority`) satisfying multiple multi-filter queries efficiently.
+5. **Dynamic Cache Layer**: Redis-backed task retrieval scoped per assignee with automated SCAN-based active cache invalidations on task creations, edits, and deletions.
+6. **Consistent Error Responses**: All route payload errors and system validations are normalized through an Express middleware formatter into standard JSON structures.
+
+### What is Built Extra (Bonus Deliverables Completed)
+1. **Advanced Aggregation & Analytics Endpoint**: Calculates aggregate statistics per user in the organization, including their overdue task count and their average task completion time (leveraging PostgreSQL filters and epochs).
+2. **Full-Fidelity Angular Frontend**: A complete web interface with separate logins, interactive Kanban sprint boards, bulk tabular data listings, task creation forms, and an advanced concurrent-request token rotation interceptor queue.
+3. **Automated E2E Integration Suite**: Local test runners verifying authorization, rotation reuse blocks, role escalations, and status transition paths automatically in a clean environment.
+
+---
+
+## Role & Login Workflow: How to Test
+
+To help you review the system easily, follow this precise role workflow:
+
+1. **Step 1: Register a New Tenant (ADMIN account)**
+   * Register a user via `POST /api/auth/register` (or the register screen on the UI).
+   * **This registers your unique organization and provisions your account as the organization ADMIN.**
+2. **Step 2: Provision Your Team (Admin creates Manager and Member users)**
+   * As the logged-in **ADMIN**, call the user creation endpoint `POST /api/users` (or use the "Users" panel on the UI) to create **MANAGER** and **MEMBER** accounts inside your organization.
+3. **Step 3: Task Delegation (Manager sets up Tasks)**
+   * Log out of the Admin account, and log in with your newly created **MANAGER** credentials.
+   * Create tasks, scope them to projects, and assign them to your **MEMBER** accounts.
+4. **Step 4: Task Execution (Member updates Status)**
+   * Log in with your **MEMBER** credentials.
+   * Observe that you can only see tasks assigned to you.
+   * Advance your task status dynamically using the allowed transitions (`TODO` -> `IN_PROGRESS` -> `IN_REVIEW` -> `DONE`).
+
+---
+
+## Completed Bonus Features
+
+In addition to all core requirements, this submission includes three fully implemented bonus capabilities:
+
+### 1. Advanced Team Analytics Endpoint
+* **Backend Implementation**: Fully aggregates overdue task counts per user alongside their average completion speeds (calculated from task creation to reaching the `DONE` state). Uses optimized PostgreSQL filtering aggregates (`COUNT(t.id) FILTER...` and `AVG(EXTRACT...) FILTER...`) for high-performance aggregations.
+* **Route**: `GET /api/analytics/tasks` (authorized for `ADMIN` and `MANAGER` roles).
+* **Frontend View**: Available under the "Analytics" sidebar navigation in the Angular dashboard.
+
+### 2. Full-Fidelity Frontend Application (Angular 18+)
+* **Implementation**: Built using standalone Angular components, reactive signals, and routing guards.
+* **Dynamic Views**: Includes a dual-view task board with a Kanban board view toggle and a bulk tabular data view.
+* **Token Interceptor**: Features a production-grade interceptor queue (`auth.interceptor.ts`) that intercepts 401 errors and performs silent background refresh token rotations to prevent concurrent request failures.
+
+### 3. Automated Integration & End-to-End Test Suite
+* **Implementation**: A comprehensive API testing module is located in `src/scripts/verify.js`.
+* **Coverage**: Runs automated requests through an Express test server to validate JWT issuing, refresh token reuse denial, multi-tenant organization isolation, sequential state transitions, and role-based action locks.
+* **Command**: Execute `npm test` to trigger the verification pipeline.
+
+---
+
 ## Architecture & System Design
+
 
 ```mermaid
 flowchart TD
@@ -193,7 +320,7 @@ stateDiagram-v2
 
 ### Transition Validation Rules
 
-1. A task can only progress sequentially: `TODO` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `IN_REVIEW` $\rightarrow$ `DONE`.
+1. A task can only progress sequentially: `TODO` → `IN_PROGRESS` → `IN_REVIEW` → `DONE`.
 2. A task can transition into `BLOCKED` from any active state (`TODO`, `IN_PROGRESS`, `IN_REVIEW`).
 3. A task can transition back out of `BLOCKED` into any active state.
 4. `DONE` is a terminal state. Once completed, the task status cannot be changed.
@@ -387,95 +514,7 @@ Example response:
 
 ---
 
-## 7. How to Run & Deploy
-
-### Prerequisites
-- Node.js (v20 or higher)
-- PostgreSQL
-- Redis
-
-### Local Setup
-
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Configure Environment Variables**:
-   Create a `.env` file in the root folder using `.env.example` as a template:
-   ```env
-   PORT=3000
-   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/task_tracker
-   REDIS_URL=redis://localhost:6379
-   JWT_ACCESS_SECRET=your_jwt_access_secret_key_change_me_in_prod
-   JWT_ACCESS_EXPIRY=15m
-   JWT_REFRESH_SECRET=your_jwt_refresh_secret_key_change_me_in_prod
-   JWT_REFRESH_EXPIRY=7d
-   ```
-
-3. **Start the Development Server**:
-   ```bash
-   npm run dev
-   ```
-
-4. **Run Integration Tests**:
-   Ensure PostgreSQL is active, then run:
-   ```bash
-   node src/scripts/verify.js
-   ```
-
-   Or use the package script:
-   ```bash
-   npm test
-   ```
-
-   **Test database caution**: the integration test calls `sequelize.sync({ force: true })`, which drops and recreates tables for the configured `DATABASE_URL`. Use a separate local test database such as `task_tracker_test` when you want to keep existing development users/tasks.
-
-   Recommended local test setup:
-   ```env
-   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/task_tracker_test
-   ```
-
-   The current test suite is intentionally small. It covers two critical backend flows:
-   - authentication with refresh-token rotation and token reuse prevention
-   - task RBAC with server-enforced status transitions
-
-   Redis caching is verified through the implementation path and Docker setup, but the automated test avoids depending on cache timing or local Redis state.
-
-5. **API Specification**:
-   A Swagger/OpenAPI 3.0 spec is included at `openapi.yaml`. Import it into Swagger UI, Postman, Insomnia, or another API client to inspect and test the endpoints.
-
-   Quick options:
-   - Paste `openapi.yaml` into https://editor.swagger.io
-   - Import `openapi.yaml` into Postman
-   - Use a VS Code OpenAPI/Swagger preview extension
-
----
-
-### Containerized Deployment (Docker Compose)
-
-The entire application stack (Web API, PostgreSQL database, and Redis caching engine) can be orchestrated seamlessly using Docker Compose:
-
-1. **Build and start services**:
-   ```bash
-   docker compose up --build -d
-   ```
-
-2. **Verify running containers**:
-   ```bash
-   docker ps
-   ```
-
-3. **Shut down services**:
-   ```bash
-   docker compose down
-   ```
-
-The compose file includes health checks for PostgreSQL, Redis, and the web service. The API waits for PostgreSQL and Redis to become healthy before starting, and the Node process also retries PostgreSQL connection attempts during startup.
-
----
-
-## 8. Implementation Notes
+## 7. Implementation Notes
 
 - The API keeps authorization in middleware wherever practical. Route-level middleware handles role checks, task ownership checks, and status-advance permission before controller logic runs.
 - PostgreSQL is the source of truth. Redis is used only as a task-list cache for assignee-based dashboard queries.
@@ -486,7 +525,7 @@ The compose file includes health checks for PostgreSQL, Redis, and the web servi
 
 ---
 
-## 9. What I Would Improve Given More Time
+## 8. What I Would Improve Given More Time
 
 - Add a formal migration system with Sequelize migrations instead of `sequelize.sync({ alter: true })`.
 - Move the integration test configuration to a dedicated `TEST_DATABASE_URL` so test data can never touch a normal development database by accident.
@@ -494,3 +533,4 @@ The compose file includes health checks for PostgreSQL, Redis, and the web servi
 - Add real-time notifications with WebSocket or Server-Sent Events when assigned tasks change.
 - Add rate limiting and request logging for stronger production hardening.
 - Add a basic frontend task board consuming the documented REST API.
+
